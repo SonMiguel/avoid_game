@@ -8,6 +8,19 @@
     <meta name="viewport" content="width=device-width">
 
     <link rel="stylesheet" href="css/app.css">
+    <script src="/socket.io/socket.io.js"></script>
+		
+			<!-- This will create a connection to socket.io, and print the user serverid that we sent from the server side. --> 
+		<script type="text/javascript">
+				//This is all that needs
+			var socket = io.connect('/');
+				//Now we can listen for that event
+			socket.on('onconnected', function( data ) {
+					//Note that the data is the object we sent from the server, as is. So we can assume its id exists. 
+		  		console.log( 'Connected successfully to the socket.io server. My server side ID is ' + data.id );
+		  	});
+		</script>
+
   </head>
   <body>
     <div id="game-over-overlay">

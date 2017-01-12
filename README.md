@@ -1,2 +1,2 @@
-
-A simple starting point for writing 2d games. See tutorial.md for more information.# avoid_game
+###2016.12.21
+똥피하기 게임 클라이언트 업데이트
