@@ -18,6 +18,7 @@ var ctx = canvas.getContext("2d");
 canvas.width = 512;
 canvas.height = 768;
 document.body.appendChild(canvas);
+var bHost = false;
 
 // The main game loop
 var lastTime;
@@ -39,6 +40,48 @@ function init() {
         reset();
     });
 
+    //This is all that needs
+    this.socket = io.connect('/');
+        //Now we can listen for that event
+    socket.on('onconnected', function( data ) {
+            //Note that the data is the object we sent from the server, as is. So we can assume its id exists. 
+        console.log( 'Connected successfully to the socket.io server. My server side ID is ' + data.id );
+        if( data.host )
+            player.id = data.id;
+        else
+            player_2.id = data.id;
+
+        bHost = data.host;
+    });
+    socket.on('join player', function(id){
+        console.log( 'The other player has been join. other player ID is ' + id);
+        if( !bHost )
+            player.id = id;
+        else
+            player_2.id = id;
+    });
+    socket.on('start game', function(hostPos, clientPos){
+        console.log( 'host pos x :' + hostPos.x + ', y :' + hostPos.y );
+        console.log( 'client pos x :' + clientPos.x + ', y :' + clientPos.y );
+        player.pos[0] = hostPos.x;
+        player.pos[1] = hostPos.y;
+        player_2.pos[0] = clientPos.x;
+        player_2.pos[1] = clientPos.y;
+    });
+    socket.on('move', function(pos, id){
+        console.log( 'Move packet arrived. moving obj ID is ' + id );
+        if(player.id == id)
+        {
+            player.pos[0] = pos.x;
+            player.pos[1] = pos.y;
+        }
+        else if(player_2.id == id)
+        {
+            player_2.pos[0] = pos.x;
+            player_2.pos[1] = pos.y;
+        }
+    });
+
     reset();
     lastTime = Date.now();
     main();
@@ -55,12 +98,14 @@ resources.onReady(init);
 
 // Game state
 var player = {
+    id: 0,
     pos: [0, 0],
     sprite: new Sprite('img/cat_1.png', [0, 0], [128, 124])
 };
 
 var player_2 = {
-    pos: [Math.random() * ((canvas.width - 39) - (128/2)), canvas.height - 119],
+    id: 0,
+    pos: [0, 0],
     sprite: new Sprite('img/cat_2.png', [0, 0], [128, 119]),
 	live: true,
 	deadTime: null
@@ -79,7 +124,6 @@ var score = 0;
 var scoreEl = document.getElementById('score');
 
 // Speed in pixels per second
-var playerSpeed = 200;
 var bulletSpeed = 500;
 var enemySpeed = 100;
 
@@ -109,19 +153,29 @@ function update(dt) {
 
 function handleInput(dt) {
     if(input.isDown('DOWN') || input.isDown('s')) {
-        player.pos[1] += playerSpeed * dt;
+        //player.pos[1] += playerSpeed * dt;
     }
 
     if(input.isDown('UP') || input.isDown('w')) {
-        player.pos[1] -= playerSpeed * dt;
+        //player.pos[1] -= playerSpeed * dt;
     }
 
     if(input.isDown('LEFT') || input.isDown('a')) {
-        player.pos[0] -= playerSpeed * dt;
+        //player.pos[0] -= playerSpeed * dt;
+        console.log('left button');
+        var player_id = player.id;
+        if(!bHost)
+            player_id = player_2.id;
+        this.socket.emit('move', 'KEY_LEFT', player_id);
     }
 
     if(input.isDown('RIGHT') || input.isDown('d')) {
-        player.pos[0] += playerSpeed * dt;
+        //player.pos[0] += playerSpeed * dt;
+        console.log('right button');
+        var player_id = player.id;
+        if(!bHost)
+            player_id = player_2.id;
+        this.socket.emit('move', 'KEY_RIGHT', player_id);
     }
 
     if(input.isDown('SPACE') &&
@@ -257,7 +311,7 @@ function checkCollisions() {
 		}
 
 		if(boxCollides(pos, size, player.pos, player.sprite.size)) {
-			gameOver();
+			//gameOver();
 		}
 	}
     
