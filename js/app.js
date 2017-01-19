@@ -81,6 +81,51 @@ function init() {
             player_2.pos[1] = pos.y;
         }
     });
+    socket.on('fire', function(x, y){
+        console.log( 'Fire packet arrived.' );
+        bullets.push({ pos: [x, y],
+                       sprite: new Sprite('img/poop.png', [0, 0], [48, 56]) });
+    });
+    socket.on('bullet move', function(bulletPos, bulletIndex){
+        console.log( 'Bullet move packet arrived. bullet ID is ' + bulletIndex );
+
+        if (null != bullets[bulletIndex])
+            bullets[bulletIndex].pos = bulletPos;
+    });
+    socket.on('bullet remove', function(bulletIndex){
+        console.log( 'Bullet remove packet arrived. bullet ID is ' + bulletIndex );
+
+        bullets.splice(bulletIndex, 1);
+    });
+    socket.on('collide', function(pos, score){
+        console.log( 'Collide packet arrived' );
+
+        // Add an explosion
+        explosions.push({
+            pos: [pos.x, pos.y],
+            sprite: new Sprite('img/sprites.png',
+                                [0, 117],
+                                [39, 39],
+                                16,
+                                [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                                null,
+                                true)
+        });
+
+        player_2.live = false;
+        score = score;
+    });
+    socket.on('bullet move', function(bulletPos, bulletIndex){
+        console.log( 'Bullet move packet arrived. bullet ID is ' + bulletIndex );
+
+        if (null != bullets[bulletIndex])
+            bullets[bulletIndex].pos = bulletPos;
+    });
+    socket.on('respawn', function(bulletIndex){
+        console.log( 'respawn packet arrived.' );
+
+        player_2.live = true;
+    });
 
     reset();
     lastTime = Date.now();
@@ -134,34 +179,11 @@ function update(dt) {
     handleInput(dt);
     updateEntities(dt);
 
-	/*
-    // It gets harder over time by adding enemies using this
-    // equation: 1-.993^gameTime
-    if(Math.random() < 1 - Math.pow(.993, gameTime)) {
-        enemies.push({
-            pos: [canvas.width,
-                  Math.random() * (canvas.height - 39)],
-            sprite: new Sprite('img/cat_2.png', [0, 0], [128, 119])
-        });
-    }
-	*/
-
-    checkCollisions();
-
     scoreEl.innerHTML = score;
 };
 
 function handleInput(dt) {
-    if(input.isDown('DOWN') || input.isDown('s')) {
-        //player.pos[1] += playerSpeed * dt;
-    }
-
-    if(input.isDown('UP') || input.isDown('w')) {
-        //player.pos[1] -= playerSpeed * dt;
-    }
-
     if(input.isDown('LEFT') || input.isDown('a')) {
-        //player.pos[0] -= playerSpeed * dt;
         console.log('left button');
         var player_id = player.id;
         if(!bHost)
@@ -170,7 +192,6 @@ function handleInput(dt) {
     }
 
     if(input.isDown('RIGHT') || input.isDown('d')) {
-        //player.pos[0] += playerSpeed * dt;
         console.log('right button');
         var player_id = player.id;
         if(!bHost)
@@ -181,19 +202,12 @@ function handleInput(dt) {
     if(input.isDown('SPACE') &&
        !isGameOver &&
        Date.now() - lastFire > 500) {
-        var x = player.pos[0] + player.sprite.size[0] / 2;
-        var y = (player.pos[1] + player.sprite.size[1] / 2) + 56;
-/*
-        bullets.push({ pos: [x, y],
-                       dir: 'forward',
-                       sprite: new Sprite('img/sprites.png', [0, 39], [18, 8]) });
-        bullets.push({ pos: [x, y],
-                       dir: 'up',
-                       sprite: new Sprite('img/sprites.png', [0, 50], [9, 5]) });
-*/
-        bullets.push({ pos: [x, y],
-                       dir: 'down',
-                       sprite: new Sprite('img/poop.png', [0, 0], [48, 56]) });
+        console.log('space button');
+        var player_id = player.id;
+        // 호스트가 아니면 쌀수없다
+        if(!bHost)
+            return;
+        this.socket.emit('fire', player_id);
 
         lastFire = Date.now();
     }
@@ -203,49 +217,16 @@ function updateEntities(dt) {
     // Update the player sprite animation
     player.sprite.update(dt);
 
-    // Update all the bullets
-    for(var i=0; i<bullets.length; i++) {
-        var bullet = bullets[i];
-
-        switch(bullet.dir) {
-        case 'up': bullet.pos[1] -= bulletSpeed * dt; break;
-        case 'down': bullet.pos[1] += bulletSpeed * dt; break;
-        default:
-            bullet.pos[0] += bulletSpeed * dt;
-        }
-
-        // Remove the bullet if it goes offscreen
-        if(bullet.pos[1] < 0 || bullet.pos[1] > canvas.height ||
-           bullet.pos[0] > canvas.width) {
-            bullets.splice(i, 1);
-            i--;
-        }
-    }
-
-	if( player_2.live ) {
+    if( player_2.live ) {
 		player_2.sprite.update(dt);
 	}
-	else {
-		if( Date.now() - player_2.deadTime > 5000 )
-		{
-			player_2.live = true;
-		}
-	}
-		
-	
-	/*
-    // Update all the enemies
-    for(var i=0; i<enemies.length; i++) {
-        enemies[i].pos[0] -= enemySpeed * dt;
-        enemies[i].sprite.update(dt);
 
-        // Remove if offscreen
-        if(enemies[i].pos[0] + enemies[i].sprite.size[0] < 0) {
-            enemies.splice(i, 1);
-            i--;
-        }
+/*
+    for(var i=0; i<bullets.length; i++) {
+        var bullet = bullets[i];
+        bullet.update(dt);
     }
-	*/
+*/
 
     // Update all the explosions
     for(var i=0; i<explosions.length; i++) {
@@ -256,122 +237,6 @@ function updateEntities(dt) {
             explosions.splice(i, 1);
             i--;
         }
-    }
-}
-
-// Collisions
-
-function collides(x, y, r, b, x2, y2, r2, b2) {
-    return !(r <= x2 || x > r2 ||
-             b <= y2 || y > b2);
-}
-
-function boxCollides(pos, size, pos2, size2) {
-    return collides(pos[0], pos[1],
-                    pos[0] + size[0], pos[1] + size[1],
-                    pos2[0], pos2[1],
-                    pos2[0] + size2[0], pos2[1] + size2[1]);
-}
-
-function checkCollisions() {
-    checkPlayerBounds();
-
-	var pos = player_2.pos;
-	var size = player_2.sprite.size;
-
-	if( player_2.live )
-	{
-		for(var j=0; j<bullets.length; j++) {
-			var pos2 = bullets[j].pos;
-			var size2 = bullets[j].sprite.size;
-
-			if(boxCollides(pos, size, pos2, size2)) {
-				player_2.live = false;
-				player_2.deadTime = Date.now();
-
-				// Add score
-				score += 100;
-
-				// Add an explosion
-				explosions.push({
-					pos: pos,
-					sprite: new Sprite('img/sprites.png',
-									   [0, 117],
-									   [39, 39],
-									   16,
-									   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-									   null,
-									   true)
-				});
-
-				// Remove the bullet and stop this iteration
-				bullets.splice(j, 1);
-				break;
-			}
-		}
-
-		if(boxCollides(pos, size, player.pos, player.sprite.size)) {
-			//gameOver();
-		}
-	}
-    
-	/*
-    // Run collision detection for all enemies and bullets
-    for(var i=0; i<enemies.length; i++) {
-        var pos = enemies[i].pos;
-        var size = enemies[i].sprite.size;
-
-        for(var j=0; j<bullets.length; j++) {
-            var pos2 = bullets[j].pos;
-            var size2 = bullets[j].sprite.size;
-
-            if(boxCollides(pos, size, pos2, size2)) {
-                // Remove the enemy
-                enemies.splice(i, 1);
-                i--;
-
-                // Add score
-                score += 100;
-
-                // Add an explosion
-                explosions.push({
-                    pos: pos,
-                    sprite: new Sprite('img/sprites.png',
-                                       [0, 117],
-                                       [39, 39],
-                                       16,
-                                       [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-                                       null,
-                                       true)
-                });
-
-                // Remove the bullet and stop this iteration
-                bullets.splice(j, 1);
-                break;
-            }
-        }
-
-        if(boxCollides(pos, size, player.pos, player.sprite.size)) {
-            gameOver();
-        }
-    }
-	*/
-}
-
-function checkPlayerBounds() {
-    // Check bounds
-    if(player.pos[0] < 0) {
-        player.pos[0] = 0;
-    }
-    else if(player.pos[0] > canvas.width - player.sprite.size[0]) {
-        player.pos[0] = canvas.width - player.sprite.size[0];
-    }
-
-    if(player.pos[1] < 0) {
-        player.pos[1] = 0;
-    }
-    else if(player.pos[1] > canvas.height - player.sprite.size[1]) {
-        player.pos[1] = canvas.height - player.sprite.size[1];
     }
 }
 
@@ -389,7 +254,6 @@ function render() {
     }
 
     renderEntities(bullets);
-    //renderEntities(enemies);
     renderEntities(explosions);
 };
 
